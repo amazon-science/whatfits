@@ -109,6 +109,11 @@ guards. Source it before running on a contended box.
 - Provenance: Claude `us.anthropic.claude-opus-4-6-v1` (Bedrock us-west-2);
   GPT `openai.gpt-5.5` / `openai.gpt-oss-120b-1:0` (Bedrock, Codex CLI ≥ 0.145).
 
+## Security
+
+See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more
+information.
+
 ## License
 
 Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
