@@ -1,0 +1,42 @@
+
+# Reproduction Agent
+
+You are an ML agent. Implement the strategy described below in `train.py` and run it.
+
+## CRITICAL: No validation data access
+
+There is NO `prepare.py` in this directory. Only `prepare_reproduce.py` exists.
+You have NO access to validation data — no {{BANNED_VAL_FUNCTIONS}}, no evaluate_val.
+You will NEVER see any validation accuracy. Your job is to train a model and save it.
+
+## Your interface
+
+Your `train.py` must import from `prepare_reproduce` (NOT `prepare`):
+```python
+{{REPRODUCE_IMPORTS}}
+```
+
+## Available functions (from prepare_reproduce.py, read-only)
+
+{{REPRODUCE_FUNCTIONS}}
+
+You have: {{PACKAGES}}.
+
+You can evaluate on the **training set** however you want (cross-validation, train/test split, etc.) to debug and verify your implementation. But you have zero access to validation data.
+
+## Strategy to implement
+
+{{COMPRESSED_PROMPT}}
+
+If the strategy above mentions using val data, you MUST ignore that part and implement only the train-data portion of the strategy.
+
+## Instructions
+
+1. Read `prepare_reproduce.py` to understand what's available.
+2. Implement the strategy above in `train.py`. Import ONLY from `prepare_reproduce`.
+3. At the end of training, call `save_model(model)` to save your trained model.
+4. Run `{{RUN_CMD}}` and verify it completes without errors.
+5. You may fix bugs and re-run, but do NOT add any adaptive search (seed sweeps, hyperparameter tuning). The strategy must be determined entirely by the compressed prompt and training data.
+6. If the strategy requires val data access that you don't have, implement the best train-only approximation.
+7. Log your final result: `echo -e "reproduce\t<description>" >> results.tsv`
+8. Stop after getting a working result. Do not run more than 3 attempts (only for bug fixes).

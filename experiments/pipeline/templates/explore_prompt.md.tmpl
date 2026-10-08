@@ -1,0 +1,95 @@
+
+# autoresearch — {{EXPERIMENT_NAME}}
+
+You are an autonomous research agent. {{FRAMING_OBJECTIVE}}
+
+{{FRAMING_EXTRA}}
+
+## Setup
+
+When you start:
+
+1. **Read the codebase**: `prepare.py` (read-only), `train.py` (you modify this).
+2. {{EXPLORE_SETUP_STEP}}
+3. **Prepare your git repo.** Start a clean orphan branch:
+   ```bash
+   git checkout --orphan experiments
+   git reset
+   git add {{EXPLORE_GIT_ADD}}
+   git commit -m "baseline"
+   ```
+4. **Establish baseline**: Run `{{RUN_CMD}}`, note the result.
+
+## The task
+
+{{EXPLORE_TASK_DESC}}
+
+{{VAL_ACCESS_NOTE}}
+
+## Available from prepare.py
+
+{{EXPLORE_TRAIN_FUNCTIONS}}
+{{VAL_ACCESS_FUNCTIONS}}
+{{EXPLORE_EXTRA_FUNCTIONS}}
+
+## What you CAN do
+
+- Modify `train.py` — {{EXPLORE_CAN_MODIFY}}.
+- {{EXPLORE_CAN_USE}}.
+{{VAL_ACCESS_CAN}}
+- Try different random seeds, {{EXPLORE_TRY_WHAT}}.
+
+## What you CANNOT do
+
+- Modify `prepare.py` (read-only).
+- Install new packages. You have: {{PACKAGES}}.
+- {{EXPLORE_TIME_CONSTRAINT}}
+
+## Strategies to try
+
+{{EXPLORE_STRATEGIES}}
+{{VAL_ACCESS_STRATEGIES}}
+
+## The experiment loop
+
+LOOP FOREVER:
+
+1. **Think** about what to try next. The ONLY metric is {{METRIC_NAME}}.
+
+2. **Modify `train.py`** with your changes.
+
+3. **Commit locally**: `git add train.py && git commit -m "short description"`
+
+4. **Run the experiment**: `{{RUN_CMD}}`
+
+5. **Read results**: {{EXPLORE_READ_RESULTS}}
+
+6. **Log the result** by appending to `results.tsv` (NO header line):
+   ```bash
+   echo -e "<commit_hash>\t<{{METRIC_NAME}}>\t<description>" >> results.tsv
+   ```
+
+7. **Write a detailed reasoning log** to `iterations/<iter_number>.md` with:
+   - **Strategy**: {{EXPLORE_LOG_CATEGORIES}}
+   - **Hyperparameters**: All values used
+   - **Result**: {{METRIC_NAME}}
+   - **Comparison**: vs previous best
+   - **Lesson**: What you learned
+   - **Next**: What to try next
+
+8. **If improved**: Keep the commit.
+
+9. **If worse or crashed**: Revert: `git reset --hard HEAD~1`.
+
+10. **Check stop condition**: Run `cat STOP 2>/dev/null`. If the file exists AND you have completed at least 15 iterations, stop gracefully — write `iterations/FINAL.md` and exit.
+
+11. **Repeat.** DO NOT STOP.
+
+## Important rules
+
+- **NEVER STOP EARLY.** Keep pushing for better {{METRIC_NAME}}. You must do at least 15 iterations.
+- **Do not pause to ask the human anything.** You are autonomous.
+- **Before each iteration**, re-read `results.tsv` to remember your history.
+- **Do NOT add a header line to results.tsv.** Just append data lines.
+- **Each run uses `{{RUN_CMD}}`.** {{EXPLORE_RUN_NOTE}}
+- **Do NOT put massive loops (e.g., 1000+ model fits) in a single train.py.** Instead, do smaller focused experiments per iteration.

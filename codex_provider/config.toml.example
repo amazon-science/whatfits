@@ -1,0 +1,4 @@
+# Copy to ~/.codex/config.toml. Auth is AWS-native (AWS_BEARER_TOKEN_BEDROCK),
+# NOT OPENAI_API_KEY. Requires Codex >= 0.145 (built-in amazon-bedrock provider).
+model_provider = "amazon-bedrock"
+model = "openai.gpt-5.5"          # or openai.gpt-oss-120b-1:0

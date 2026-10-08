@@ -1,0 +1,15 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: CC-BY-NC-4.0
+
+[project]
+name = "autoresearch-gene-expr-cert"
+version = "0.1.0"
+description = "Gene expression compression certificate experiment"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "scikit-learn==1.9.0",
+    "xgboost",
+    "scipy",
+    "pandas",
+]
