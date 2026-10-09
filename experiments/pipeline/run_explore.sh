@@ -30,10 +30,13 @@ if [ ! -d "$AGENT_DIR" ]; then
     mkdir -p "$AGENT_DIR/iterations"
 
     # Write run metadata for reproducibility
+    AGENT_PROVIDER_VALUE="$(get_agent_provider)"
+    AGENT_MODEL_VALUE="$(get_agent_model)"
     cat > "$AGENT_DIR/run_meta.json" <<META
 {
   "run_id": "${RUN_ID:-1}",
-  "claude_model": "${CLAUDE_MODEL:-opus}",
+  "agent_provider": "${AGENT_PROVIDER_VALUE}",
+  "agent_model": "${AGENT_MODEL_VALUE}",
   "val_access_level": "${VAL_ACCESS_LEVEL:-score_only}",
   "explorer_framing": "${EXPLORER_FRAMING:-standard}",
   "compress_tokens": "${COMPRESS_TOKENS:-128}",
@@ -63,13 +66,21 @@ echo "Starting explorer agent in $AGENT_DIR"
 echo "Max turns: $MAX_TURNS, Max restarts: $MAX_RESTARTS"
 echo "Logging to agent.log, restart tracking in restart.log"
 
+count_results_lines() {
+    if [ -f results.tsv ]; then
+        wc -l < results.tsv
+    else
+        echo 0
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # Restart loop with context injection
 # ---------------------------------------------------------------------------
 
 for attempt in $(seq 1 "$MAX_RESTARTS"); do
     echo "=== Launch $attempt at $(date) ===" >> restart.log
-    ITERS_BEFORE=$(wc -l < results.tsv 2>/dev/null || echo 0)
+    ITERS_BEFORE=$(count_results_lines)
 
     # Build context from previous iteration logs
     CONTEXT=""
@@ -95,12 +106,14 @@ Resume from iteration $((ITERS_BEFORE + 1)). Do NOT repeat strategies that alrea
     fi
 
     FULL_PROMPT="$(cat explore_prompt.md)${CONTEXT}"
+    printf '%s' "$FULL_PROMPT" > .agent_prompt.current.md
 
-    claude --dangerously-skip-permissions --max-turns "$MAX_TURNS" \
-        --model "${CLAUDE_MODEL:-opus}" \
-        -p "$FULL_PROMPT" >> agent.log 2>&1
+    python3 "$PIPELINE_DIR/agent_runner.py" \
+        --cwd "$PWD" \
+        --max-turns "$MAX_TURNS" \
+        --prompt-file .agent_prompt.current.md >> agent.log 2>&1
 
-    ITERS_AFTER=$(wc -l < results.tsv 2>/dev/null || echo 0)
+    ITERS_AFTER=$(count_results_lines)
     echo "  Ended at $(date), iters: $ITERS_BEFORE -> $ITERS_AFTER" >> restart.log
 
     # Check if STOP file exists
@@ -118,10 +131,12 @@ Resume from iteration $((ITERS_BEFORE + 1)). Do NOT repeat strategies that alrea
     # If no progress was made, wait before retry (may be rate limited)
     if [ "$ITERS_AFTER" -eq "$ITERS_BEFORE" ]; then
         echo "  No progress, waiting 60s before retry" >> restart.log
-        sleep 60
+        if [ "$attempt" -lt "$MAX_RESTARTS" ]; then
+            sleep 60
+        fi
     else
         sleep 5
     fi
 done
 
-echo "=== Loop finished at $(date), total iters: $(wc -l < results.tsv 2>/dev/null || echo 0) ===" >> restart.log
+echo "=== Loop finished at $(date), total iters: $(count_results_lines) ===" >> restart.log

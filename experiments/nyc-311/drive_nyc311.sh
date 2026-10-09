@@ -16,17 +16,33 @@ set -u
 # Repo-relative: resolve from this script's location (experiments/nyc-311/).
 EXP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$EXP_DIR/../.." && pwd)"
-PIPE="$ROOT/experiments/pipeline"
-MODEL="us.anthropic.claude-opus-4-6-v1"
+PIPE="$ROOT/pipeline"
+AGENT_PROVIDER="$(printf '%s' "${AGENT_PROVIDER:-claude}" | tr '[:upper:]' '[:lower:]')"
+case "$AGENT_PROVIDER" in
+    claude|anthropic) AGENT_PROVIDER="claude" ;;
+    codex|gpt|openai) AGENT_PROVIDER="codex" ;;
+    *) echo "ERROR: unsupported AGENT_PROVIDER='$AGENT_PROVIDER'" >&2; exit 2 ;;
+esac
+if [ "$AGENT_PROVIDER" = "codex" ]; then
+    MODEL="${AGENT_MODEL:-${CODEX_MODEL:-openai.gpt-5.5}}"
+else
+    MODEL="${AGENT_MODEL:-${CLAUDE_MODEL:-us.anthropic.claude-opus-4-6-v1}}"
+fi
 
 # --- Budget knobs (override via env) ---
 EXPLORE_TARGET_ITERS="${EXPLORE_TARGET_ITERS:-20}"   # stop explorer after this many iters (>=15 for graceful exit)
 EXPLORE_MAX_SECONDS="${EXPLORE_MAX_SECONDS:-5400}"   # hard wall-clock cap per explore arm (90 min)
-EXPLORE_MAX_TURNS="${EXPLORE_MAX_TURNS:-600}"        # per claude launch
+EXPLORE_MAX_TURNS="${EXPLORE_MAX_TURNS:-600}"        # per agent launch
 LADDER_TARGET_ITERS="${LADDER_TARGET_ITERS:-20}"
 LADDER_MAX_SECONDS="${LADDER_MAX_SECONDS:-5400}"
 
-export CLAUDE_MODEL="$MODEL"
+export AGENT_PROVIDER
+export AGENT_MODEL="$MODEL"
+if [ "$AGENT_PROVIDER" = "codex" ]; then
+    export CODEX_MODEL="$MODEL"
+else
+    export CLAUDE_MODEL="$MODEL"
+fi
 export VAL_ACCESS_LEVEL=score_only
 export EXPLORER_FRAMING=neutral
 export COMPRESS_TOKENS=128
@@ -107,6 +123,9 @@ done
 banner "ARM B — LADDER (1-bit feedback) EXPLORE"
 # =====================================================================
 LADDER_COND="ladder-neutral"
+if [ "$AGENT_PROVIDER" != "claude" ]; then
+    LADDER_COND="${LADDER_COND}-${AGENT_PROVIDER}"
+fi
 EXPLORE_B="$EXP_DIR/explore-agent-${LADDER_COND}"
 if [ -f "$EXPLORE_B/results.tsv" ] && [ "$(wc -l < "$EXPLORE_B/results.tsv")" -ge 15 ]; then
     echo "SKIP ladder: already has $(wc -l < "$EXPLORE_B/results.tsv") iters"
@@ -116,7 +135,8 @@ else
     # Ladder runner resolves the experiment as PROJECT_ROOT/<arg>, so pass the
     # repo-relative path "experiments/nyc-311" (matches launch_wave.sh usage).
     ( cd "$ROOT" && python3 ladder/run_ladder_experiment.py experiments/nyc-311 \
-        --framing neutral --model "$MODEL" --max-turns "$EXPLORE_MAX_TURNS" --max-restarts 10 )
+        --framing neutral --agent-provider "$AGENT_PROVIDER" --model "$MODEL" \
+        --max-turns "$EXPLORE_MAX_TURNS" --max-restarts 10 )
     kill "$WD" 2>/dev/null || true
 fi
 echo "--- ladder state ---"; cat "$EXPLORE_B/ladder_state.json" 2>/dev/null || echo "(none)"

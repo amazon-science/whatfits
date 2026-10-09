@@ -35,9 +35,10 @@ Output:
 import json
 import os
 import re
-import subprocess
 import sys
 import time
+
+from agent_runner import get_agent_model, get_agent_provider, run_agent_text
 
 MAX_COMPRESS_TURNS = 5
 MAX_AUDIT_TURNS = 5
@@ -135,21 +136,9 @@ def strip_comments(text: str) -> str:
     return text.strip()
 
 
-def run_claude(prompt: str, cwd: str, max_turns: int = 30, timeout: int = 600) -> str:
-    """Run claude CLI with a prompt and return stdout."""
-    result = subprocess.run(
-        [
-            "claude", "--dangerously-skip-permissions",
-            "--max-turns", str(max_turns),
-            "--model", os.environ.get("CLAUDE_MODEL", "opus"),
-            "-p", prompt,
-        ],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
-    return result.stdout + result.stderr
+def run_agent_cli(prompt: str, cwd: str, max_turns: int = 30, timeout: int = 600) -> str:
+    """Run the configured agent CLI with a prompt and return combined output."""
+    return run_agent_text(prompt, cwd, max_turns=max_turns, timeout=timeout)
 
 
 def run_audit(compressed_text: str, train_py: str, budget: int, n_tokens: int,
@@ -215,7 +204,7 @@ Severity guidelines — err on the side of "critical":
 
 The reproducer agent has NO context beyond this prompt. When in doubt, mark it critical."""
 
-    output = run_claude(audit_prompt, cwd, max_turns=1, timeout=300)
+    output = run_agent_cli(audit_prompt, cwd, max_turns=1, timeout=300)
 
     # Parse JSON from output — try all candidate JSON blocks, prefer the one with "issues"
     parsed = None
@@ -253,7 +242,7 @@ The reproducer agent has NO context beyond this prompt. When in doubt, mark it c
 
 
 def run_dryrun_interpret(compressed_text: str, cwd: str) -> str:
-    """Ask a fresh Claude to write the train.py it would implement from ONLY the compressed prompt.
+    """Ask a fresh agent to write the train.py it would implement from ONLY the compressed prompt.
 
     Returns the generated code as a string for structural comparison against the actual train.py.
     """
@@ -274,7 +263,7 @@ Where the prompt is ambiguous, use your best judgment and add a comment like:
 
 Write the code to `dryrun_train.py`. Do NOT write to `train.py`."""
 
-    output = run_claude(interpret_prompt, cwd, max_turns=5, timeout=600)
+    output = run_agent_cli(interpret_prompt, cwd, max_turns=5, timeout=600)
     # Extract code from output — look for python code block or raw code
     # Try to find a ```python ... ``` block first
     code_match = re.search(r'```python\s*\n(.*?)```', output, re.DOTALL)
@@ -359,7 +348,7 @@ Set "pass" to true ONLY if there are no high-impact mismatches.
 Mark impact as "high" if the mismatch would likely change the metric by >2%.
 Mark as "medium" for 1-2% impact, "low" for <1%."""
 
-    output = run_claude(compare_prompt, cwd, max_turns=1, timeout=300)
+    output = run_agent_cli(compare_prompt, cwd, max_turns=1, timeout=300)
 
     # Parse JSON — same robust parsing as run_audit
     parsed = None
@@ -445,6 +434,7 @@ def main():
 
     mode_str = "budget + audit" if do_audit else "budget only"
     print(f"Iterative compression: budget={budget} tokens, mode={mode_str}")
+    print(f"Agent provider: {get_agent_provider()} ({get_agent_model()})")
     print(f"Working dir: {compress_dir}")
     print()
 
@@ -458,8 +448,8 @@ def main():
         if turn == 1 or clean_text is None:
             # clean_text is None when a prior turn's agent failed to write the
             # file at all; fall back to the original compress prompt rather than
-            # crashing in truncate_to_budget(None). (GPT/codex is less reliable
-            # than Claude about always emitting the file on turn 1.)
+            # crashing in truncate_to_budget(None) when the agent fails to emit
+            # the file on an earlier turn.
             prompt = compress_prompt
         else:
             truncated = truncate_to_budget(clean_text, budget)
@@ -481,7 +471,7 @@ Rewrite the compressed prompt to fit within {budget} tokens. Key principles:
 Write ONLY the compressed prompt to `compressed_prompt.md`. Nothing else."""
 
         t0 = time.time()
-        output = run_claude(prompt, compress_dir, max_turns=30)
+        output = run_agent_cli(prompt, compress_dir, max_turns=30)
         elapsed = time.time() - t0
 
         prompt_path = os.path.join(compress_dir, "compressed_prompt.md")
@@ -625,7 +615,7 @@ hard-truncated and information will be lost mid-word. To make room for fixes:
 Write ONLY the revised compressed prompt to `compressed_prompt.md`. Nothing else."""
 
             t0 = time.time()
-            output = run_claude(revise_prompt, compress_dir, max_turns=30)
+            output = run_agent_cli(revise_prompt, compress_dir, max_turns=30)
             revise_elapsed = time.time() - t0
 
             # Re-read and verify budget
@@ -767,7 +757,7 @@ CRITICAL CONSTRAINT: Stay within {budget} tokens. When you need to make room:
 Write ONLY the revised compressed prompt to `compressed_prompt.md`. Nothing else."""
 
             t0 = time.time()
-            output = run_claude(revise_prompt, compress_dir, max_turns=30)
+            output = run_agent_cli(revise_prompt, compress_dir, max_turns=30)
             revise_elapsed = time.time() - t0
 
             with open(prompt_path) as f:

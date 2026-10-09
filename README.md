@@ -32,10 +32,12 @@ narrow the validation-data channel:
 ### Capabilities
 
 - **Full agentic pipeline**: explore → compress → reproduce → audit, plus the
-  one-bit ladder mechanism (`pipeline/`, `experiments/pipeline/`, `ladder/`).
-- **Multi-provider agents**: runs on Claude (via the Claude Code CLI) and, via a
-  drop-in shim (`codex_provider/`), on GPT-5.5 and GPT-OSS-120B through the Codex
-  CLI on Amazon Bedrock — the pipeline scripts are unchanged across providers.
+  one-bit ladder mechanism (`pipeline/`, `ladder/`). `pipeline/` is the
+  canonical implementation; `experiments/pipeline/` is a compatibility copy for
+  older launch scripts.
+- **Configurable agent provider**: runs explorer, compressor, and reproducer loops
+  through Claude Code by default, with an explicit Codex CLI option for
+  cross-model-family checks.
 - **Leakage auditing** (`experiments/pipeline/audit.py`) and a token-budget
   sweep for measuring reproduction quality vs. prompt length.
 - **Datasets** live together under `experiments/`, each a self-contained module
@@ -49,17 +51,40 @@ narrow the validation-data channel:
 
 - Python ≥ 3.11, with [`uv`](https://github.com/astral-sh/uv) (`uv run` is the
   runner). Core deps: scikit-learn, xgboost, numpy, scipy, pandas.
-- An agent CLI + credentials:
-  - **Claude**: the `claude` CLI, configured for your provider (e.g. Amazon
-    Bedrock, `us.anthropic.claude-opus-4-6-v1`).
-  - **GPT (optional)**: the `codex` CLI (≥ 0.145) — see `codex_provider/`.
+- Agent CLI:
+  - Default: Claude Code CLI; `claude` must be installed, authenticated, and
+    available on `PATH`.
+  - Optional: Codex CLI; `codex` must be installed and configured for the target
+    provider/model.
 
 ## How to run the experiments
 
-Each dataset directory has a `run.sh` wrapper over the pipeline:
+Install the root helper environment once:
 
 ```bash
-cd experiments/gene-expr        # or nyc-311, gene-expr-sealed
+uv sync
+```
+
+The synthetic `gene-expr` task stages itself on first use. The two datasets that
+need explicit staging are:
+
+```bash
+# Real post-cutoff control data from NYC Open Data
+cd experiments/nyc-311
+uv run python download_data.py
+uv run python prepare.py
+
+# Sealed synthetic variant: materialize cache, then verify the loader
+cd ../gene-expr-sealed
+uv run python stage_data.py
+uv run python prepare.py
+```
+
+From the repository root, each dataset directory has a `run.sh` wrapper over the
+pipeline:
+
+```bash
+cd experiments/gene-expr        # or use experiments/nyc-311, experiments/gene-expr-sealed
 
 bash run.sh explore             # run the explorer agent (adaptive search)
 bash run.sh compress [CKPT]     # compress a checkpoint's strategy to a short prompt
@@ -70,9 +95,11 @@ bash run.sh full                # explore → compress → reproduce → audit
 
 **Ladder (one-bit) arm:**
 
+Run these from the repository root:
+
 ```bash
-python ladder/run_ladder_experiment.py experiments/<dataset> --framing neutral
-python ladder/compute_bound.py experiments/<dataset> ladder-neutral
+uv run python ladder/run_ladder_experiment.py experiments/<dataset> --framing neutral
+uv run python ladder/compute_bound.py experiments/<dataset> ladder-neutral
 ```
 
 **End-to-end driver** (both arms, with watchdog/timeout guards) — see
@@ -82,32 +109,59 @@ python ladder/compute_bound.py experiments/<dataset> ladder-neutral
 bash experiments/nyc-311/drive_nyc311.sh
 ```
 
-### Running on a non-Claude model (GPT via Bedrock)
+### Agent Provider
 
-`codex_provider/` contains a drop-in `claude` shim that re-emits the pipeline's
-`claude -p …` calls as `codex exec` against Amazon Bedrock, so the same scripts
-run on GPT-5.5 / GPT-OSS-120B:
+The pipeline uses `AGENT_PROVIDER=claude` by default and calls:
 
 ```bash
-cp codex_provider/config.toml.example ~/.codex/config.toml   # edit model id
-source codex_provider/env.sh                                 # thread caps + region
-# put the shim first on PATH as `claude`, then run the pipeline as usual
+claude --dangerously-skip-permissions --max-turns N --model "$AGENT_MODEL" -p "$PROMPT"
 ```
 
-Auth is AWS-native (`AWS_BEARER_TOKEN_BEDROCK`), not `OPENAI_API_KEY`.
+To run the same rendered prompts through Codex instead, set:
+
+```bash
+export AGENT_PROVIDER=codex
+export AGENT_MODEL=openai.gpt-5.5
+export CODEX_MODEL_PROVIDER=amazon-bedrock
+export CODEX_SANDBOX=workspace-write
+```
+
+This invokes Codex directly through `pipeline/agent_runner.py`; it does not shadow
+`claude` on `PATH`. If the Codex agent needs unrestricted local git writes inside
+an isolated checkout, use `CODEX_SANDBOX=danger-full-access`. Non-Claude runs add
+the provider to generated condition directories, e.g. `explore-agent-scoreonly-neutral-codex`,
+unless `EXPLORE_AGENT_DIR` is explicitly set.
+
+### Paper Reproduction Map
+
+- Output compression: `bash experiments/<dataset>/run.sh full`
+- One-bit ladder: `uv run python ladder/run_ladder_experiment.py experiments/<dataset> --framing neutral`
+- Gene-Expr sealed control: stage with `experiments/gene-expr-sealed/stage_data.py`, then use the same `run.sh` commands.
+- NYC 311 post-cutoff control: stage with `experiments/nyc-311/download_data.py`, then use the same `run.sh` commands.
 
 ### Shared-machine note
 
-`codex_provider/env.sh` exports thread caps (`OMP/OPENBLAS/MKL/NUMEXPR=4`) to
-prevent CPU oversubscription; the drivers wrap training/agent calls in `timeout`
-guards. Source it before running on a contended box.
+Set thread caps before running on a contended machine; reproducer agents often
+write multi-model stacks that otherwise spawn one thread per core:
+
+```bash
+export OMP_NUM_THREADS=4
+export OPENBLAS_NUM_THREADS=4
+export MKL_NUM_THREADS=4
+export NUMEXPR_NUM_THREADS=4
+```
+
+The drivers also wrap training/agent calls in `timeout` guards.
 
 ## Notes
 
 - Data files, model artifacts, and agent run directories are gitignored;
   regenerate them via the pipeline.
-- Provenance: Claude `us.anthropic.claude-opus-4-6-v1` (Bedrock us-west-2);
-  GPT `openai.gpt-5.5` / `openai.gpt-oss-120b-1:0` (Bedrock, Codex CLI ≥ 0.145).
+- Paper-run provenance: Claude `us.anthropic.claude-opus-4-6-v1` (Bedrock
+  us-west-2). Codex/GPT reruns should record `AGENT_PROVIDER`, `AGENT_MODEL`,
+  `CODEX_MODEL_PROVIDER`, and `CODEX_SANDBOX` in their run notes.
+- `codebook/` is an experimental structured-description prototype and is not
+  needed for the main paper reproduction path.
 
 ## Security
 

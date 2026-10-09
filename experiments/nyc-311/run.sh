@@ -15,10 +15,10 @@
 #   bash run.sh stop                 # stop explorer
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -d "$SCRIPT_DIR/../pipeline" ]; then
-    PIPELINE_DIR="$(cd "$SCRIPT_DIR/../pipeline" && pwd)"
-elif [ -d "$SCRIPT_DIR/../../pipeline" ]; then
+if [ -d "$SCRIPT_DIR/../../pipeline" ]; then
     PIPELINE_DIR="$(cd "$SCRIPT_DIR/../../pipeline" && pwd)"
+elif [ -d "$SCRIPT_DIR/../pipeline" ]; then
+    PIPELINE_DIR="$(cd "$SCRIPT_DIR/../pipeline" && pwd)"
 else
     echo "ERROR: Cannot find pipeline/ directory"
     exit 2

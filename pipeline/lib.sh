@@ -111,6 +111,28 @@ Think of yourself as a careful data scientist: you peek at val to understand the
 : "${METRIC_DIRECTION:=higher}"
 : "${CERT_THRESHOLD:=0.02}"
 
+get_agent_provider() {
+    local provider="${AGENT_PROVIDER:-claude}"
+    provider="$(printf '%s' "$provider" | tr '[:upper:]' '[:lower:]')"
+    case "$provider" in
+        claude|anthropic) echo "claude" ;;
+        codex|gpt|openai) echo "codex" ;;
+        *)
+            echo "ERROR: unsupported AGENT_PROVIDER='$provider' (expected claude or codex)" >&2
+            return 2
+            ;;
+    esac
+}
+
+get_agent_model() {
+    local provider
+    provider="$(get_agent_provider)"
+    case "$provider" in
+        claude) echo "${AGENT_MODEL:-${CLAUDE_MODEL:-opus}}" ;;
+        codex) echo "${AGENT_MODEL:-${CODEX_MODEL:-openai.gpt-5.5}}" ;;
+    esac
+}
+
 # Sort flag for "best" metric value: -rn for higher-is-better, -n for lower-is-better
 get_sort_best_flag() {
     if [ "${METRIC_DIRECTION:-higher}" = "lower" ]; then
@@ -141,6 +163,18 @@ get_condition_suffix() {
     local tokens="${COMPRESS_TOKENS:-128}"
     if [ "$tokens" != "128" ]; then
         suffix="${suffix}-t${tokens}"
+    fi
+    if [ -z "$EXPLORE_AGENT_DIR" ]; then
+        local provider
+        provider="$(get_agent_provider)"
+        if [ "$provider" != "claude" ]; then
+            suffix="${suffix}-${provider}"
+        fi
+    fi
+    # Append run-id suffix for reruns (unset/1 = un-suffixed r1)
+    local run_id="${RUN_ID:-}"
+    if [ -n "$run_id" ] && [ "$run_id" != "1" ] && [ -z "$EXPLORE_AGENT_DIR" ]; then
+        suffix="${suffix}-r${run_id}"
     fi
     echo "$suffix"
 }

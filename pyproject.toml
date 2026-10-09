@@ -1,0 +1,16 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: CC-BY-NC-4.0
+
+[project]
+name = "whatfits"
+version = "0.1.0"
+description = "Reproduction code for What Fits (Into Few Tokens) Doesn't Overfit"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "scikit-learn",
+    "xgboost",
+    "matplotlib",
+]

@@ -14,6 +14,8 @@ Usage:
     python ladder/run_ladder_experiment.py folktables-10k --framing aggressive
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import math
@@ -186,9 +188,14 @@ def main():
                         help="Override VAL_SIZE in prepare.py (appends nXXXX to condition name)")
     parser.add_argument("--run-id", type=str, default=None,
                         help="Run ID for reruns (e.g. 2, 3). Appends -rN to condition name. Unset/1 = no suffix.")
-    parser.add_argument("--model", default="opus",
-                        help="Claude CLI model flag (passed via CLAUDE_MODEL env var)")
+    parser.add_argument("--agent-provider", default=os.environ.get("AGENT_PROVIDER", "claude").lower(),
+                        type=str.lower,
+                        choices=["claude", "codex"],
+                        help="Agent CLI provider used by pipeline/agent_runner.py")
+    parser.add_argument("--model", default=None,
+                        help="Agent model id. Defaults to opus for Claude, openai.gpt-5.5 for Codex.")
     args = parser.parse_args()
+    model = args.model or ("openai.gpt-5.5" if args.agent_provider == "codex" else "opus")
 
     dataset_dir = PROJECT_ROOT / args.experiment
     if not dataset_dir.exists():
@@ -196,6 +203,8 @@ def main():
         sys.exit(1)
 
     condition = f"ladder-{args.framing}"
+    if args.agent_provider != "claude":
+        condition += f"-{args.agent_provider}"
     if args.n_val:
         condition += f"-n{args.n_val}"
     if args.run_id and args.run_id != "1":
@@ -299,6 +308,8 @@ def main():
         "explorer_dir": str(explorer_dir.relative_to(PROJECT_ROOT)),
         "n_val": n_val,
         "max_t": args.max_t,
+        "agent_provider": args.agent_provider,
+        "agent_model": model,
         "mechanism": "ladder",
         "feedback": "binary (IMPROVED / NO IMPROVEMENT)",
     }
@@ -312,6 +323,7 @@ def main():
     print(f"  n_val:      {n_val}")
     print(f"  Feedback:   binary only")
     print(f"  Max T:      {args.max_t if args.max_t else 'unlimited'}")
+    print(f"  Agent:      {args.agent_provider} ({model})")
     print(f"  Job name:   {job_name}")
     print(f"  Explorer:   {explorer_dir}")
 
@@ -320,7 +332,12 @@ def main():
     env["VAL_ACCESS_LEVEL"] = "score_only"  # closest match for template
     env["EXPLORER_FRAMING"] = args.framing
     env["EXPLORE_AGENT_DIR"] = f"explore-agent-{condition}"
-    env["CLAUDE_MODEL"] = args.model
+    env["AGENT_PROVIDER"] = args.agent_provider
+    env["AGENT_MODEL"] = model
+    if args.agent_provider == "claude":
+        env["CLAUDE_MODEL"] = model
+    else:
+        env["CODEX_MODEL"] = model
     if args.run_id:
         env["RUN_ID"] = args.run_id
     if args.max_t is not None:

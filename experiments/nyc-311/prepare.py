@@ -72,8 +72,8 @@ def _build_from_raw():
     if not RAW_CSV.exists():
         raise RuntimeError(
             f"Raw CSV not found: {RAW_CSV}\n"
-            f"Stage the January-2026 NYC 311 extract there first "
-            f"(see experiments/nyc-311/README or the download script)."
+            f"Stage the January-2026 NYC 311 extract there first: "
+            f"cd experiments/nyc-311 && uv run python download_data.py"
         )
 
     df = pd.read_csv(RAW_CSV, low_memory=False)

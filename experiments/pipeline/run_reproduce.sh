@@ -52,14 +52,17 @@ fi
 
 echo "Starting reproducer agent in $REPRODUCE_DIR"
 echo "Checkpoint: $LABEL"
+echo "Agent provider: $(get_agent_provider)"
+echo "Agent model: $(get_agent_model)"
 echo ""
 echo "Compressed prompt being used:"
 cat "$COMPRESS_DIR/compressed_prompt.md"
 echo ""
 
-claude --dangerously-skip-permissions --max-turns 100 \
-    --model "${CLAUDE_MODEL:-opus}" \
-    -p "$(cat reproduce_prompt.md)" \
+python3 "$PIPELINE_DIR/agent_runner.py" \
+    --cwd "$PWD" \
+    --max-turns 100 \
+    --prompt-file reproduce_prompt.md \
     2>&1 | stdbuf -oL tee agent.log
 
 # ── Post-agent evaluation ────────────────────────

@@ -34,10 +34,10 @@ content=$(cat "$TEMPLATE_FILE")
 
 # Generic replacement: find all {{VAR}} patterns and replace with shell variable values
 # Extract unique variable names from template
-vars=$(grep -oP '\{\{[A-Z_]+\}\}' "$TEMPLATE_FILE" | sort -u | sed 's/{{//;s/}}//')
+vars=$(grep -Eo '\{\{[A-Z_]+\}\}' "$TEMPLATE_FILE" | sort -u | sed 's/{{//;s/}}//')
 
 for var in $vars; do
-    value="${!var}"
+    value="${!var-}"
     # Default COMPRESS_TOKENS to 128 if not set
     if [ "$var" = "COMPRESS_TOKENS" ] && [ -z "$value" ]; then
         value="128"

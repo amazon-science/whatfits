@@ -38,7 +38,7 @@ for dataset_dir in "$ROOT"/*/; do
             fi
         fi
 
-        # Is there a claude process anchored to this dir? Check agent.log mtime.
+        # Is there an active agent process anchored to this dir? Check agent.log mtime.
         proc="idle"
         if [ -f "$agent_dir/agent.log" ]; then
             log_age=$(( $(date +%s) - $(stat -c %Y "$agent_dir/agent.log" 2>/dev/null || echo 0) ))

@@ -7,8 +7,9 @@
 
 set -e
 
-EXPDIR="/fsx/gstevenw/testing_alignment_algos/compression-cert/experiments/gene-expr"
-PIPELINE="/fsx/gstevenw/testing_alignment_algos/compression-cert/pipeline"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EXPDIR="$SCRIPT_DIR"
+PIPELINE="$(cd "$SCRIPT_DIR/../../pipeline" && pwd)"
 
 cd "$EXPDIR"
 
